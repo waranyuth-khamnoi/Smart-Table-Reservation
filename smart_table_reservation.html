@@ -1,0 +1,1554 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ระบบจองโต๊ะร้านอาหารออนไลน์ | Smart Table Reservation</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Prompt & Sarabun -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&family=Sarabun:wght@400;500;600&display=swap" rel="stylesheet">
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <!-- QRCode.js for Digital Booking Pass -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Prompt', 'sans-serif'],
+            body: ['Sarabun', 'sans-serif'],
+          },
+          colors: {
+            emerald: {
+              950: '#0D261C',
+              900: '#143628',
+              800: '#1B5E3A',
+              100: '#E6F0EC',
+              50: '#F2F7F5',
+            },
+            terracotta: {
+              600: '#C25919',
+              500: '#D96B27',
+              400: '#E88D4F',
+              100: '#FBECE2',
+            },
+            cream: {
+              50: '#FAF9F6',
+              100: '#F3F1EB',
+            },
+            charcoal: '#1C2420'
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-cream-50 text-charcoal font-sans antialiased min-h-screen flex flex-col selection:bg-terracotta-500 selection:text-white">
+
+  <!-- Toast Notification Container (Replaces alert) -->
+  <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-full pointer-events-none px-4 sm:px-0"></div>
+
+  <!-- Custom Confirmation Modal (Replaces confirm) -->
+  <div id="confirm-modal" class="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 hidden items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-stone-200 transform transition-all">
+      <div class="flex items-center gap-3 mb-3">
+        <div id="confirm-icon-bg" class="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+          <i id="confirm-icon" class="fa-solid fa-triangle-exclamation"></i>
+        </div>
+        <h3 id="confirm-title" class="text-lg font-bold text-charcoal">ยืนยันการทำรายการ</h3>
+      </div>
+      <p id="confirm-message" class="text-stone-600 text-sm mb-6 leading-relaxed">คุณต้องการดำเนินการนี้ใช่หรือไม่?</p>
+      <div class="flex justify-end gap-3">
+        <button id="confirm-cancel-btn" type="button" class="px-4 py-2.5 rounded-xl text-sm font-medium text-stone-600 bg-stone-100 hover:bg-stone-200 transition">
+          ปิดหน้าต่าง
+        </button>
+        <button id="confirm-ok-btn" type="button" class="px-5 py-2.5 rounded-xl text-sm font-semibold text-white bg-red-600 hover:bg-red-700 transition shadow-sm">
+          ยืนยัน
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Digital Booking Pass Modal -->
+  <div id="pass-modal" class="fixed inset-0 bg-black/65 backdrop-blur-xs z-50 hidden items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-white rounded-3xl max-w-lg w-full overflow-hidden shadow-2xl border border-stone-200 my-auto">
+      <!-- Modal Top Header -->
+      <div class="bg-emerald-900 text-cream-50 px-6 py-5 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-terracotta-500 flex items-center justify-center text-white shadow">
+            <i class="fa-solid fa-circle-check text-xl"></i>
+          </div>
+          <div>
+            <p class="text-xs text-terracotta-400 font-semibold uppercase tracking-wider">Booking Confirmed</p>
+            <h3 class="text-lg font-bold">ยืนยันการจองโต๊ะสำเร็จ!</h3>
+          </div>
+        </div>
+        <button onclick="closePassModal()" class="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white transition" aria-label="ปิด">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Ticket Body -->
+      <div class="p-6 space-y-5">
+        <div class="bg-cream-50 rounded-2xl p-5 border border-stone-200 relative">
+          <div class="flex flex-col sm:flex-row items-center justify-between gap-4 border-b border-dashed border-stone-300 pb-4">
+            <div class="text-center sm:text-left">
+              <span class="text-xs font-medium text-stone-500">รหัสการจอง (Booking ID)</span>
+              <div class="flex items-center justify-center sm:justify-start gap-2 mt-0.5">
+                <span id="pass-booking-id" class="text-2xl font-bold text-emerald-900 tracking-wide">BK-20260000</span>
+                <button onclick="copyBookingId()" title="คัดลอกรหัสการจอง" class="p-2 rounded-lg bg-emerald-100 text-emerald-900 hover:bg-emerald-800 hover:text-white transition text-xs">
+                  <i class="fa-regular fa-copy"></i>
+                </button>
+              </div>
+              <span class="inline-flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
+                <i class="fa-solid fa-check"></i> ยืนยันสิทธิ์โต๊ะแล้ว
+              </span>
+            </div>
+            <!-- QR Code Container -->
+            <div class="bg-white p-2.5 rounded-xl border border-stone-200 shadow-xs shrink-0 flex flex-col items-center">
+              <div id="pass-qrcode" class="w-24 h-24 flex items-center justify-center"></div>
+              <span class="text-[10px] text-stone-400 mt-1">สแกนเช็กอินหน้าร้าน</span>
+            </div>
+          </div>
+
+          <!-- Booking Details Grid -->
+          <div class="grid grid-cols-2 gap-3 pt-4 text-sm">
+            <div>
+              <p class="text-stone-400 text-xs">ชื่อผู้จอง</p>
+              <p id="pass-name" class="font-semibold text-charcoal mt-0.5">-</p>
+            </div>
+            <div>
+              <p class="text-stone-400 text-xs">เบอร์โทรศัพท์</p>
+              <p id="pass-phone" class="font-semibold text-charcoal mt-0.5">-</p>
+            </div>
+            <div>
+              <p class="text-stone-400 text-xs">วันที่ & เวลา</p>
+              <p id="pass-datetime" class="font-semibold text-charcoal mt-0.5">-</p>
+            </div>
+            <div>
+              <p class="text-stone-400 text-xs">จำนวนลูกค้า</p>
+              <p id="pass-guests" class="font-semibold text-charcoal mt-0.5">-</p>
+            </div>
+            <div class="col-span-2 bg-emerald-900 text-white rounded-xl p-3 flex items-center justify-between mt-1">
+              <div>
+                <p class="text-xs text-emerald-100">โต๊ะที่จัดสรรให้ (Auto Allocated)</p>
+                <p id="pass-table" class="text-base font-bold text-terracotta-400">โต๊ะ T01 (โซน 2 ที่นั่ง)</p>
+              </div>
+              <i class="fa-solid fa-utensils text-xl text-emerald-100/60"></i>
+            </div>
+          </div>
+        </div>
+
+        <!-- SMS / LINE Notification Preview -->
+        <div class="bg-emerald-50 border border-emerald-800/20 rounded-2xl p-4">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-bold text-emerald-800 flex items-center gap-1.5">
+              <i class="fa-brands fa-line text-base text-[#06C755]"></i> ตัวอย่างข้อความแจ้งเตือนอัตโนมัติ (SMS / LINE)
+            </span>
+            <span class="text-[11px] text-stone-500">ส่งทันที</span>
+          </div>
+          <p id="pass-sms-preview" class="text-xs text-stone-700 bg-white p-3 rounded-xl border border-stone-200 leading-relaxed font-body">
+            [ครัวไพรพฤกษ์] ยืนยันการจองรหัส BK-2026XXXX สำหรับคุณ...
+          </p>
+        </div>
+
+        <button onclick="closePassModal()" class="w-full py-3 rounded-xl bg-terracotta-500 hover:bg-terracotta-600 text-white font-semibold transition shadow-md">
+          เสร็จสิ้น
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top Navigation Bar -->
+  <header class="bg-emerald-900 text-cream-50 sticky top-0 z-40 shadow-md">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex flex-col md:flex-row md:items-center md:justify-between py-3.5 gap-3">
+        <!-- Brand Logo & Title -->
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-terracotta-500 flex items-center justify-center text-white shadow-sm">
+              <i class="fa-solid fa-utensils text-lg"></i>
+            </div>
+            <div>
+              <h1 class="text-lg sm:text-xl font-bold tracking-tight leading-tight">ครัวไพรพฤกษ์ • Smart Reserve</h1>
+              <p class="text-xs text-emerald-100/80">ระบบจองโต๊ะร้านอาหารออนไลน์แบบเรียลไทม์</p>
+            </div>
+          </div>
+
+          <!-- Real-time Sync Indicator Badge -->
+          <div id="sync-badge" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-950/70 border border-emerald-800 text-xs">
+            <span id="sync-dot" class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse"></span>
+            <span id="sync-text" class="text-emerald-100 font-medium">กำลังเชื่อมต่อ...</span>
+          </div>
+        </div>
+
+        <!-- 3 Main Navigation Tabs -->
+        <nav class="flex bg-emerald-950/60 p-1 rounded-xl border border-emerald-800/60 overflow-x-auto">
+          <button onclick="switchTab('customer')" id="tab-btn-customer" class="tab-btn flex-1 md:flex-none px-4 py-2 rounded-lg text-sm font-semibold transition whitespace-nowrap flex items-center justify-center gap-2 bg-terracotta-500 text-white shadow-xs">
+            <i class="fa-solid fa-calendar-check"></i>
+            <span>จองโต๊ะ (สำหรับลูกค้า)</span>
+          </button>
+          <button onclick="switchTab('staff')" id="tab-btn-staff" class="tab-btn flex-1 md:flex-none px-4 py-2 rounded-lg text-sm font-medium text-emerald-100 hover:text-white transition whitespace-nowrap flex items-center justify-center gap-2">
+            <i class="fa-solid fa-clipboard-user"></i>
+            <span>จัดการหน้าร้าน (Staff)</span>
+          </button>
+          <button onclick="switchTab('sdlc')" id="tab-btn-sdlc" class="tab-btn flex-1 md:flex-none px-4 py-2 rounded-lg text-sm font-medium text-emerald-100 hover:text-white transition whitespace-nowrap flex items-center justify-center gap-2">
+            <i class="fa-solid fa-diagram-project"></i>
+            <span>รายละเอียดแผน SDLC</span>
+          </button>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Area -->
+  <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
+
+    <!-- =================================================================== -->
+    <!-- TAB 1: จองโต๊ะ (สำหรับลูกค้า)                                        -->
+    <!-- =================================================================== -->
+    <section id="view-customer" class="space-y-8">
+      <!-- Hero Banner -->
+      <div class="bg-gradient-to-r from-emerald-900 to-emerald-800 rounded-3xl p-6 sm:p-8 text-cream-50 shadow-lg flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+        <div class="max-w-2xl">
+          <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-terracotta-500/20 border border-terracotta-400/40 text-terracotta-400 text-xs font-semibold mb-3">
+            <i class="fa-solid fa-bolt"></i> จองสำเร็จภายใน 1 นาที • ซิงค์โต๊ะว่างทันทีทุกเครื่อง
+          </span>
+          <h2 class="text-2xl sm:text-3xl font-bold leading-snug">สำรองโต๊ะล่วงหน้าอย่างมั่นใจ ไม่มีการจองซ้ำซ้อน</h2>
+          <p class="text-emerald-100/90 text-sm sm:text-base mt-2">
+            เลือกวัน เวลา และจำนวนผู้เข้าใช้บริการ ระบบจะค้นหาและจัดสรรโต๊ะที่เหมาะสมที่สุดให้คุณโดยอัตโนมัติ
+          </p>
+        </div>
+        <div class="bg-emerald-950/50 border border-emerald-700/60 rounded-2xl p-4 sm:p-5 shrink-0 flex items-center gap-4">
+          <div class="text-center px-3 border-r border-emerald-800">
+            <p class="text-2xl font-bold text-terracotta-400">12</p>
+            <p class="text-xs text-emerald-100">โต๊ะทั้งหมด</p>
+          </div>
+          <div class="text-center px-3 border-r border-emerald-800">
+            <p id="hero-available-count" class="text-2xl font-bold text-emerald-300">12</p>
+            <p class="text-xs text-emerald-100">ว่างในรอบนี้</p>
+          </div>
+          <div class="text-center px-3">
+            <p class="text-2xl font-bold text-white">60s</p>
+            <p class="text-xs text-emerald-100">ยืนยันทันที</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Booking Grid: Left Form + Right Live Floor Plan -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-start">
+
+        <!-- Left Column (5 cols): Booking Selection Form -->
+        <div class="lg:col-span-5 bg-white rounded-3xl p-6 sm:p-7 shadow-sm border border-stone-200 space-y-6">
+          <div class="flex items-center justify-between border-b border-stone-100 pb-4">
+            <div>
+              <span class="text-xs font-bold text-terracotta-500 uppercase tracking-wider">Step 1 • กรอกข้อมูล</span>
+              <h3 class="text-xl font-bold text-emerald-900">เลือกวัน เวลา และจำนวนคน</h3>
+            </div>
+            <span class="w-9 h-9 rounded-full bg-cream-100 text-emerald-900 flex items-center justify-center font-bold text-sm">1</span>
+          </div>
+
+          <form id="booking-form" onsubmit="handleBookingSubmit(event)" class="space-y-5">
+            <!-- Date Picker -->
+            <div>
+              <label for="booking-date" class="block text-sm font-semibold text-charcoal mb-1.5">
+                <i class="fa-regular fa-calendar text-terracotta-500 mr-1.5"></i>วันที่ต้องการจอง
+              </label>
+              <input type="date" id="booking-date" required
+                class="w-full px-4 py-3 rounded-xl border border-stone-300 bg-cream-50 focus:bg-white focus:ring-2 focus:ring-emerald-800 focus:border-emerald-800 outline-none text-sm font-medium transition">
+            </div>
+
+            <!-- Time Slots -->
+            <div>
+              <label class="block text-sm font-semibold text-charcoal mb-2">
+                <i class="fa-regular fa-clock text-terracotta-500 mr-1.5"></i>เลือกช่วงเวลา (รอบละ 90 นาที)
+              </label>
+              <div id="time-slots-grid" class="grid grid-cols-3 gap-2.5">
+                <!-- Rendered by JS -->
+              </div>
+            </div>
+
+            <!-- Number of Guests (1 - 10) -->
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <label class="text-sm font-semibold text-charcoal">
+                  <i class="fa-solid fa-users text-terracotta-500 mr-1.5"></i>จำนวนผู้เข้าใช้บริการ
+                </label>
+                <span class="text-xs text-stone-500">รองรับ 1 - 10 ท่าน</span>
+              </div>
+              <div class="flex items-center gap-3 bg-cream-50 p-2 rounded-xl border border-stone-200">
+                <button type="button" onclick="changeGuestCount(-1)" class="w-11 h-11 rounded-lg bg-white border border-stone-300 hover:bg-stone-100 flex items-center justify-center text-charcoal font-bold shadow-2xs transition">
+                  <i class="fa-solid fa-minus"></i>
+                </button>
+                <div class="flex-1 text-center">
+                  <span id="guest-count-display" class="text-2xl font-bold text-emerald-900">2</span>
+                  <span class="text-sm font-medium text-stone-600 ml-1">ท่าน</span>
+                </div>
+                <button type="button" onclick="changeGuestCount(1)" class="w-11 h-11 rounded-lg bg-white border border-stone-300 hover:bg-stone-100 flex items-center justify-center text-charcoal font-bold shadow-2xs transition">
+                  <i class="fa-solid fa-plus"></i>
+                </button>
+              </div>
+              <!-- Quick Guest Pills -->
+              <div class="flex gap-1.5 mt-2 flex-wrap">
+                <button type="button" onclick="setGuestCount(2)" class="px-3 py-1 rounded-lg text-xs font-medium bg-stone-100 hover:bg-emerald-100 text-stone-700 transition">2 ท่าน</button>
+                <button type="button" onclick="setGuestCount(4)" class="px-3 py-1 rounded-lg text-xs font-medium bg-stone-100 hover:bg-emerald-100 text-stone-700 transition">4 ท่าน</button>
+                <button type="button" onclick="setGuestCount(6)" class="px-3 py-1 rounded-lg text-xs font-medium bg-stone-100 hover:bg-emerald-100 text-stone-700 transition">6 ท่าน</button>
+                <button type="button" onclick="setGuestCount(8)" class="px-3 py-1 rounded-lg text-xs font-medium bg-stone-100 hover:bg-emerald-100 text-stone-700 transition">8 ท่าน (VIP)</button>
+              </div>
+            </div>
+
+            <!-- Auto-Allocated Table Summary Box -->
+            <div id="allocation-box" class="rounded-2xl p-4 bg-emerald-50 border border-emerald-800/25 transition-all">
+              <div class="flex items-start justify-between gap-3">
+                <div>
+                  <span class="text-xs font-bold text-emerald-800 flex items-center gap-1.5">
+                    <i class="fa-solid fa-wand-magic-sparkles text-terracotta-500"></i> ระบบจัดสรรโต๊ะอัตโนมัติ (Best-Fit)
+                  </span>
+                  <p id="allocated-table-title" class="text-base font-bold text-emerald-900 mt-1">โต๊ะ T01 • โซน 2 ที่นั่ง</p>
+                  <p id="allocated-table-desc" class="text-xs text-stone-600 mt-0.5">ขนาดเหมาะสมที่สุดสำหรับ 2 ท่าน (หรือคลิกเลือกโต๊ะอื่นที่ว่างบนผัง)</p>
+                </div>
+                <span id="allocated-badge" class="px-2.5 py-1 rounded-lg bg-emerald-800 text-white text-xs font-bold shrink-0">พร้อมจอง</span>
+              </div>
+            </div>
+
+            <!-- Customer Contact Info -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <div>
+                <label for="customer-name" class="block text-xs font-semibold text-charcoal mb-1">ชื่อผู้จอง *</label>
+                <input type="text" id="customer-name" required placeholder="เช่น คุณสมชาย ใจดี"
+                  class="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 bg-cream-50 focus:bg-white focus:ring-2 focus:ring-emerald-800 outline-none text-sm">
+              </div>
+              <div>
+                <label for="customer-phone" class="block text-xs font-semibold text-charcoal mb-1">เบอร์โทรศัพท์ *</label>
+                <input type="tel" id="customer-phone" required placeholder="08X-XXX-XXXX"
+                  class="w-full px-3.5 py-2.5 rounded-xl border border-stone-300 bg-cream-50 focus:bg-white focus:ring-2 focus:ring-emerald-800 outline-none text-sm">
+              </div>
+            </div>
+
+            <!-- Submit Button -->
+            <button type="submit" id="submit-booking-btn"
+              class="w-full py-3.5 px-6 rounded-xl bg-terracotta-500 hover:bg-terracotta-600 disabled:bg-stone-300 disabled:cursor-not-allowed text-white font-bold text-base shadow-md hover:shadow-lg transition flex items-center justify-center gap-2">
+              <i class="fa-solid fa-check-circle"></i>
+              <span>ยืนยันการจองโต๊ะทันที</span>
+            </button>
+          </form>
+        </div>
+
+        <!-- Right Column (7 cols): Live Floor Plan & Booking Status Checker -->
+        <div class="lg:col-span-7 space-y-6">
+          <!-- Real-Time Restaurant Floor Plan -->
+          <div class="bg-white rounded-3xl p-6 sm:p-7 shadow-sm border border-stone-200">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-stone-100 pb-4 mb-5">
+              <div>
+                <span class="text-xs font-bold text-emerald-800 uppercase tracking-wider">Step 2 • ผังโต๊ะเรียลไทม์</span>
+                <h3 class="text-xl font-bold text-emerald-900">สถานะโต๊ะประจำวันที่ <span id="floorplan-date-label" class="text-terracotta-500">-</span> เวลา <span id="floorplan-time-label" class="text-terracotta-500">-</span></h3>
+              </div>
+              <!-- Legend -->
+              <div class="flex flex-wrap items-center gap-3 text-xs font-medium">
+                <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-xs bg-terracotta-500 inline-block"></span> โต๊ะที่เลือก/แนะนำ</span>
+                <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-xs bg-emerald-100 border border-emerald-600 inline-block"></span> ว่าง</span>
+                <span class="flex items-center gap-1.5"><span class="w-3 h-3 rounded-xs bg-stone-200 inline-block"></span> ถูกจองแล้ว</span>
+              </div>
+            </div>
+
+            <!-- 4 Zones Container -->
+            <div id="floorplan-zones" class="space-y-5">
+              <!-- Populated dynamically by JS -->
+            </div>
+          </div>
+
+          <!-- Check Booking Status Section -->
+          <div class="bg-white rounded-3xl p-6 sm:p-7 shadow-sm border border-stone-200">
+            <div class="flex items-center gap-2.5 mb-3">
+              <div class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-900 flex items-center justify-center">
+                <i class="fa-solid fa-magnifying-glass"></i>
+              </div>
+              <div>
+                <h3 class="text-lg font-bold text-emerald-900">ตรวจสอบสถานะการจอง / เปิดบัตรคิว</h3>
+                <p class="text-xs text-stone-500">ค้นหาด้วยรหัสการจอง (เช่น BK-2026XXXX) หรือเบอร์โทรศัพท์</p>
+              </div>
+            </div>
+
+            <div class="flex flex-col sm:flex-row gap-2.5 mt-4">
+              <input type="text" id="search-booking-input" placeholder="กรอกรหัส BK-2026XXXX หรือเบอร์โทร..."
+                class="flex-1 px-4 py-2.5 rounded-xl border border-stone-300 bg-cream-50 focus:bg-white focus:ring-2 focus:ring-emerald-800 outline-none text-sm">
+              <button type="button" onclick="searchBookingStatus()" class="px-5 py-2.5 rounded-xl bg-emerald-900 hover:bg-emerald-800 text-white font-semibold text-sm transition shrink-0">
+                ค้นหาการจอง
+              </button>
+            </div>
+
+            <div id="search-results-container" class="mt-4 space-y-2.5 hidden">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- TAB 2: จัดการหน้าร้าน (Staff Dashboard)                             -->
+    <!-- =================================================================== -->
+    <section id="view-staff" class="hidden space-y-6">
+      <!-- Dashboard Header & Filters -->
+      <div class="bg-white rounded-3xl p-6 shadow-sm border border-stone-200 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+        <div>
+          <span class="text-xs font-bold text-terracotta-500 uppercase tracking-wider">Staff Operations • Real-Time Sync</span>
+          <h2 class="text-2xl font-bold text-emerald-900">ระบบจัดการหน้าร้านและตรวจสอบคิวโต๊ะ</h2>
+          <p class="text-sm text-stone-500">ข้อมูลอัปเดตอัตโนมัติทันทีเมื่อลูกค้าทำรายการจองจากอุปกรณ์อื่น</p>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3">
+          <div>
+            <label for="staff-date-filter" class="block text-[11px] font-semibold text-stone-500 mb-1">เลือกวันที่ดูรายการ</label>
+            <input type="date" id="staff-date-filter" onchange="renderStaffDashboard()"
+              class="px-3.5 py-2 rounded-xl border border-stone-300 bg-cream-50 text-sm font-medium outline-none focus:ring-2 focus:ring-emerald-800">
+          </div>
+          <div>
+            <label for="staff-time-filter" class="block text-[11px] font-semibold text-stone-500 mb-1">กรองช่วงเวลา</label>
+            <select id="staff-time-filter" onchange="renderStaffDashboard()"
+              class="px-3.5 py-2 rounded-xl border border-stone-300 bg-cream-50 text-sm font-medium outline-none focus:ring-2 focus:ring-emerald-800">
+              <option value="ALL">ทุกช่วงเวลา (ทั้งวัน)</option>
+              <option value="11:00">11:00 น.</option>
+              <option value="12:30">12:30 น.</option>
+              <option value="14:00">14:00 น.</option>
+              <option value="17:00">17:00 น.</option>
+              <option value="18:30">18:30 น.</option>
+              <option value="20:00">20:00 น.</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- KPI Cards -->
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-5">
+        <div class="bg-white rounded-2xl p-6 border border-stone-200 shadow-xs flex items-center justify-between">
+          <div>
+            <p class="text-sm font-medium text-stone-500">การจองที่ยืนยันแล้ว</p>
+            <p id="kpi-total-bookings" class="text-3xl font-bold text-emerald-900 mt-1">0</p>
+            <p class="text-xs text-emerald-700 mt-1">รายการ (ไม่รวมที่ยกเลิก)</p>
+          </div>
+          <div class="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-800 flex items-center justify-center text-xl">
+            <i class="fa-solid fa-calendar-check"></i>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-2xl p-6 border border-stone-200 shadow-xs flex items-center justify-between">
+          <div>
+            <p class="text-sm font-medium text-stone-500">อัตราเต็มโต๊ะ (Occupancy Rate)</p>
+            <p id="kpi-occupancy-rate" class="text-3xl font-bold text-terracotta-500 mt-1">0%</p>
+            <p id="kpi-occupancy-sub" class="text-xs text-stone-500 mt-1">จากทั้งหมด 72 รอบโต๊ะ/วัน</p>
+          </div>
+          <div class="w-12 h-12 rounded-2xl bg-terracotta-100 text-terracotta-500 flex items-center justify-center text-xl">
+            <i class="fa-solid fa-chart-pie"></i>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-2xl p-6 border border-stone-200 shadow-xs flex items-center justify-between">
+          <div>
+            <p class="text-sm font-medium text-stone-500">ลูกค้าที่คาดว่าจะเข้าใช้บริการ</p>
+            <p id="kpi-expected-guests" class="text-3xl font-bold text-charcoal mt-1">0 <span class="text-base font-normal text-stone-500">ท่าน</span></p>
+            <p id="kpi-checkedin-sub" class="text-xs text-emerald-700 mt-1">เช็กอินแล้ว 0 รายการ</p>
+          </div>
+          <div class="w-12 h-12 rounded-2xl bg-cream-100 text-emerald-900 flex items-center justify-center text-xl">
+            <i class="fa-solid fa-users"></i>
+          </div>
+        </div>
+      </div>
+
+      <!-- Real-Time Bookings Table -->
+      <div class="bg-white rounded-3xl shadow-sm border border-stone-200 overflow-hidden">
+        <div class="px-6 py-4 border-b border-stone-100 flex items-center justify-between">
+          <h3 class="font-bold text-lg text-emerald-900">รายการจองโต๊ะทั้งหมด</h3>
+          <span class="text-xs text-stone-500 flex items-center gap-1.5">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span> Live Firestore Stream
+          </span>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-cream-50 text-stone-600 text-xs uppercase border-b border-stone-200">
+                <th class="py-3.5 px-5 font-semibold">รหัสการจอง</th>
+                <th class="py-3.5 px-5 font-semibold">เวลา</th>
+                <th class="py-3.5 px-5 font-semibold">โต๊ะ / โซน</th>
+                <th class="py-3.5 px-5 font-semibold">ข้อมูลลูกค้า</th>
+                <th class="py-3.5 px-5 font-semibold">จำนวน</th>
+                <th class="py-3.5 px-5 font-semibold">สถานะ</th>
+                <th class="py-3.5 px-5 font-semibold text-right">การจัดการหน้าร้าน</th>
+              </tr>
+            </thead>
+            <tbody id="staff-bookings-tbody" class="divide-y divide-stone-100 text-sm">
+              <!-- Populated by JS -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- =================================================================== -->
+    <!-- TAB 3: รายละเอียดแผน SDLC                                           -->
+    <!-- =================================================================== -->
+    <section id="view-sdlc" class="hidden space-y-8">
+      <!-- SDLC Hero Header -->
+      <div class="bg-emerald-900 text-cream-50 rounded-3xl p-7 sm:p-9 shadow-lg">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+          <div>
+            <span class="px-3 py-1 rounded-full bg-terracotta-500 text-white text-xs font-bold uppercase tracking-wider">
+              Software Development Life Cycle
+            </span>
+            <h2 class="text-2xl sm:text-4xl font-bold mt-3">แผนการพัฒนาระบบจองโต๊ะร้านอาหาร (7 เฟส)</h2>
+            <p class="text-emerald-100 mt-2 text-base">
+              แนวคิดหลัก: <strong class="text-terracotta-400">"ส่งมอบคุณค่า แล้วเรียนรู้ต่อเนื่อง"</strong> — พัฒนาชุดแรก (MVP) ภายใน 10 สัปดาห์
+            </p>
+          </div>
+          <div class="grid grid-cols-3 gap-3 bg-emerald-950/60 p-4 rounded-2xl border border-emerald-800 shrink-0 text-center">
+            <div class="px-2">
+              <p class="text-2xl font-bold text-terracotta-400">7 เฟส</p>
+              <p class="text-xs text-emerald-100">ขั้นตอนทำงาน</p>
+            </div>
+            <div class="px-2 border-x border-emerald-800">
+              <p class="text-2xl font-bold text-white">10 สัปดาห์</p>
+              <p class="text-xs text-emerald-100">ระยะเวลาโครงการ</p>
+            </div>
+            <div class="px-2">
+              <p class="text-2xl font-bold text-emerald-300">380,000</p>
+              <p class="text-xs text-emerald-100">งบประมาณ (บาท)</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 7 Phases Cards -->
+      <div>
+        <h3 class="text-xl font-bold text-emerald-900 mb-4 flex items-center gap-2">
+          <i class="fa-solid fa-list-ol text-terracotta-500"></i> 7 เฟส • 7 คำถามที่ทุกโปรเจคต้องตอบ
+        </h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <!-- Phase 1 -->
+          <div class="bg-white rounded-2xl p-5 border border-stone-200 shadow-2xs">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-bold text-terracotta-500">เฟส 1 • Planning</span>
+              <span class="text-xs bg-cream-100 px-2 py-0.5 rounded-md font-semibold text-stone-600">สัปดาห์ที่ 1</span>
+            </div>
+            <h4 class="font-bold text-base text-charcoal mb-1">อะไรคุ้มที่จะทำ?</h4>
+            <p class="text-xs text-stone-600 leading-relaxed mb-3">กำหนดขอบเขต MVP ระบบจองโต๊ะ วางแผนงาน 10 สัปดาห์ และประเมินงบประมาณ</p>
+            <div class="text-xs font-semibold text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-lg">ผลลัพธ์: งานรอบแรก (MVP) + แผน</div>
+          </div>
+
+          <!-- Phase 2 -->
+          <div class="bg-white rounded-2xl p-5 border border-stone-200 shadow-2xs">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-bold text-terracotta-500">เฟส 2 • Requirements</span>
+              <span class="text-xs bg-cream-100 px-2 py-0.5 rounded-md font-semibold text-stone-600">สัปดาห์ที่ 2</span>
+            </div>
+            <h4 class="font-bold text-base text-charcoal mb-1">ผู้ใช้ต้องการอะไร?</h4>
+            <p class="text-xs text-stone-600 leading-relaxed mb-3">เก็บความต้องการเลือกวัน เวลา จำนวนคน และเงื่อนไขจัดสรรโต๊ะอัตโนมัติ</p>
+            <div class="text-xs font-semibold text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-lg">ผลลัพธ์: User Story การจอง</div>
+          </div>
+
+          <!-- Phase 3 -->
+          <div class="bg-white rounded-2xl p-5 border border-stone-200 shadow-2xs">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-bold text-terracotta-500">เฟส 3 • Design</span>
+              <span class="text-xs bg-cream-100 px-2 py-0.5 rounded-md font-semibold text-stone-600">สัปดาห์ที่ 3–4</span>
+            </div>
+            <h4 class="font-bold text-base text-charcoal mb-1">ระบบจะทำงานอย่างไร?</h4>
+            <p class="text-xs text-stone-600 leading-relaxed mb-3">ออกแบบหน้าจอ UI/UX การจองและหน้ายืนยัน ออกแบบฐานข้อมูลโต๊ะและ API</p>
+            <div class="text-xs font-semibold text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-lg">ผลลัพธ์: แบบหน้าจอและ API</div>
+          </div>
+
+          <!-- Phase 4 -->
+          <div class="bg-white rounded-2xl p-5 border border-stone-200 shadow-2xs">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-bold text-terracotta-500">เฟส 4 • Development</span>
+              <span class="text-xs bg-cream-100 px-2 py-0.5 rounded-md font-semibold text-stone-600">สัปดาห์ที่ 5–7</span>
+            </div>
+            <h4 class="font-bold text-base text-charcoal mb-1">จะสร้างร่วมกันอย่างไร?</h4>
+            <p class="text-xs text-stone-600 leading-relaxed mb-3">พัฒนาโค้ดอัลกอริทึมจัดโต๊ะว่าง ระบบฐานข้อมูลเรียลไทม์ และบัตรยืนยัน QR Code</p>
+            <div class="text-xs font-semibold text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-lg">ผลลัพธ์: โค้ดที่รวมกันแล้วใช้ได้</div>
+          </div>
+
+          <!-- Phase 5 -->
+          <div class="bg-white rounded-2xl p-5 border border-stone-200 shadow-2xs">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-bold text-emerald-800">เฟส 5 • Testing</span>
+              <span class="text-xs bg-cream-100 px-2 py-0.5 rounded-md font-semibold text-stone-600">สัปดาห์ที่ 8</span>
+            </div>
+            <h4 class="font-bold text-base text-charcoal mb-1">ตรงโจทย์และไม่พังหรือยัง?</h4>
+            <p class="text-xs text-stone-600 leading-relaxed mb-3">ทดสอบการจองพร้อมกันหลายเครื่อง (Concurrency) ป้องกันการจองโต๊ะซ้ำซ้อน</p>
+            <div class="text-xs font-semibold text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-lg">ผลลัพธ์: หลักฐานทดสอบระบบ</div>
+          </div>
+
+          <!-- Phase 6 -->
+          <div class="bg-white rounded-2xl p-5 border border-stone-200 shadow-2xs">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-bold text-emerald-800">เฟส 6 • Deployment</span>
+              <span class="text-xs bg-cream-100 px-2 py-0.5 rounded-md font-semibold text-stone-600">สัปดาห์ที่ 9</span>
+            </div>
+            <h4 class="font-bold text-base text-charcoal mb-1">ส่งให้ใช้งานจริงอย่างไร?</h4>
+            <p class="text-xs text-stone-600 leading-relaxed mb-3">ติดตั้งระบบขึ้นเซิร์ฟเวอร์จริง ตั้งค่าโดเมน ความปลอดภัย และเปิดให้ลูกค้าจอง</p>
+            <div class="text-xs font-semibold text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-lg">ผลลัพธ์: ระบบที่ผู้ใช้ใช้ได้จริง</div>
+          </div>
+
+          <!-- Phase 7 -->
+          <div class="bg-white rounded-2xl p-5 border border-stone-200 shadow-2xs">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-xs font-bold text-emerald-800">เฟส 7 • Maintenance</span>
+              <span class="text-xs bg-cream-100 px-2 py-0.5 rounded-md font-semibold text-stone-600">สัปดาห์ที่ 10+</span>
+            </div>
+            <h4 class="font-bold text-base text-charcoal mb-1">จะเรียนรู้และแก้อะไรต่อ?</h4>
+            <p class="text-xs text-stone-600 leading-relaxed mb-3">เก็บสถิติการใช้งานจริง อัตราเต็มโต๊ะ และฟีดแบ็กเพื่อพัฒนาต่อในรอบถัดไป</p>
+            <div class="text-xs font-semibold text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-lg">ผลลัพธ์: รายการสิ่งที่ต้องแก้ต่อ</div>
+          </div>
+
+          <!-- Core Loop Card -->
+          <div class="bg-emerald-900 text-white rounded-2xl p-5 flex flex-col justify-center">
+            <span class="text-xs font-bold text-terracotta-400 uppercase mb-1">หัวใจการทำงาน</span>
+            <h4 class="text-xl font-bold leading-snug">ส่งมอบคุณค่า แล้วเรียนรู้ต่อเนื่อง</h4>
+            <p class="text-xs text-emerald-100 mt-2">เปิดใช้งานจริงให้เร็ว วัดผลจากผู้ใช้จริง และปรับปรุงอย่างต่อเนื่อง</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Team Roles & Budget Split -->
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <!-- 5 Roles Table -->
+        <div class="lg:col-span-7 bg-white rounded-3xl p-6 border border-stone-200 shadow-2xs">
+          <h3 class="text-lg font-bold text-emerald-900 mb-4 flex items-center gap-2">
+            <i class="fa-solid fa-users-gear text-terracotta-500"></i> โครงสร้างทีมงาน 5 ตำแหน่งหลัก
+          </h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm border-collapse">
+              <thead>
+                <tr class="bg-emerald-900 text-white text-xs">
+                  <th class="py-3 px-4 rounded-tl-xl">ตำแหน่งงาน</th>
+                  <th class="py-3 px-4">เฟสหลัก</th>
+                  <th class="py-3 px-4 rounded-tr-xl">หน้าที่ความรับผิดชอบ</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-stone-100">
+                <tr>
+                  <td class="py-3 px-4 font-bold text-charcoal">1. Project Manager (PM)</td>
+                  <td class="py-3 px-4 text-xs text-terracotta-600 font-semibold">Planning, Deployment</td>
+                  <td class="py-3 px-4 text-xs text-stone-600">วางแผน MVP คุมงบ 380,000 บาท และส่งมอบระบบ</td>
+                </tr>
+                <tr>
+                  <td class="py-3 px-4 font-bold text-charcoal">2. Business Analyst (BA)</td>
+                  <td class="py-3 px-4 text-xs text-terracotta-600 font-semibold">Requirements</td>
+                  <td class="py-3 px-4 text-xs text-stone-600">เขียน User Story และเงื่อนไขการจัดสรรโต๊ะว่าง</td>
+                </tr>
+                <tr>
+                  <td class="py-3 px-4 font-bold text-charcoal">3. UX/UI Designer</td>
+                  <td class="py-3 px-4 text-xs text-terracotta-600 font-semibold">Design</td>
+                  <td class="py-3 px-4 text-xs text-stone-600">ออกแบบหน้าเลือกวัน-เวลา จำนวนคน และบัตรยืนยัน</td>
+                </tr>
+                <tr>
+                  <td class="py-3 px-4 font-bold text-charcoal">4. Full-Stack Developer</td>
+                  <td class="py-3 px-4 text-xs text-terracotta-600 font-semibold">Development, Maintenance</td>
+                  <td class="py-3 px-4 text-xs text-stone-600">เขียนโค้ด Frontend/Backend อัลกอริทึมจัดโต๊ะและฐานข้อมูล</td>
+                </tr>
+                <tr>
+                  <td class="py-3 px-4 font-bold text-charcoal">5. QA Tester</td>
+                  <td class="py-3 px-4 text-xs text-terracotta-600 font-semibold">Testing</td>
+                  <td class="py-3 px-4 text-xs text-stone-600">ทดสอบการจองพร้อมกันหลายเครื่องและระบบแจ้งเตือน</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Budget Breakdown -->
+        <div class="lg:col-span-5 bg-white rounded-3xl p-6 border border-stone-200 shadow-2xs flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="text-lg font-bold text-emerald-900 flex items-center gap-2">
+                <i class="fa-solid fa-coins text-terracotta-500"></i> สรุปงบประมาณโครงการ
+              </h3>
+              <span class="text-xl font-bold text-terracotta-500">380,000 บาท</span>
+            </div>
+            <div class="space-y-3.5 text-xs">
+              <div>
+                <div class="flex justify-between font-semibold mb-1">
+                  <span>Full-Stack Developer (Frontend/Backend/API)</span>
+                  <span>150,000 บาท (39%)</span>
+                </div>
+                <div class="w-full bg-stone-100 h-2.5 rounded-full overflow-hidden">
+                  <div class="bg-emerald-900 h-full rounded-full" style="width: 39%"></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between font-semibold mb-1">
+                  <span>Project Manager (PM)</span>
+                  <span>60,000 บาท (16%)</span>
+                </div>
+                <div class="w-full bg-stone-100 h-2.5 rounded-full overflow-hidden">
+                  <div class="bg-emerald-800 h-full rounded-full" style="width: 16%"></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between font-semibold mb-1">
+                  <span>UX/UI Designer</span>
+                  <span>55,000 บาท (14%)</span>
+                </div>
+                <div class="w-full bg-stone-100 h-2.5 rounded-full overflow-hidden">
+                  <div class="bg-terracotta-500 h-full rounded-full" style="width: 14%"></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between font-semibold mb-1">
+                  <span>Business Analyst (BA)</span>
+                  <span>45,000 บาท (12%)</span>
+                </div>
+                <div class="w-full bg-stone-100 h-2.5 rounded-full overflow-hidden">
+                  <div class="bg-terracotta-400 h-full rounded-full" style="width: 12%"></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between font-semibold mb-1">
+                  <span>QA Tester</span>
+                  <span>45,000 บาท (12%)</span>
+                </div>
+                <div class="w-full bg-stone-100 h-2.5 rounded-full overflow-hidden">
+                  <div class="bg-stone-600 h-full rounded-full" style="width: 12%"></div>
+                </div>
+              </div>
+              <div>
+                <div class="flex justify-between font-semibold mb-1">
+                  <span>Cloud Server, โดเมนเนม, SSL และระบบแจ้งเตือน</span>
+                  <span>25,000 บาท (7%)</span>
+                </div>
+                <div class="w-full bg-stone-100 h-2.5 rounded-full overflow-hidden">
+                  <div class="bg-amber-500 h-full rounded-full" style="width: 7%"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-5 pt-4 border-t border-stone-100 text-xs text-stone-500 flex items-center justify-between">
+            <span>ระยะเวลาดำเนินงานรวม: <strong>10 สัปดาห์</strong></span>
+            <span class="text-emerald-800 font-semibold">พร้อมส่งมอบ MVP</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-white border-t border-stone-200 py-5 mt-12">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-stone-500">
+      <p>© 2026 ระบบจองโต๊ะร้านอาหารออนไลน์ (Smart Table Reservation) • พัฒนาตามกรอบ SDLC 7 เฟส</p>
+      <p id="footer-session-info">Multi-Client Real-Time Sync Enabled</p>
+    </div>
+  </footer>
+
+  <!-- ===================================================================== -->
+  <!-- FIREBASE & APPLICATION LOGIC                                          -->
+  <!-- ===================================================================== -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import {
+      getFirestore,
+      collection,
+      doc,
+      onSnapshot,
+      runTransaction,
+      serverTimestamp
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // -----------------------------------------------------------------------
+    // 1. RESTAURANT CONFIGURATION & MASTER DATA (12 Tables across 4 Zones)
+    // -----------------------------------------------------------------------
+    const TIME_SLOTS = ['11:00', '12:30', '14:00', '17:00', '18:30', '20:00'];
+
+    const TABLES = [
+      // Zone 2 Seats
+      { id: 'T01', name: 'T01', zone: 'โซน 2 ที่นั่ง', zoneKey: '2-seat', capacity: 2, minGuests: 1 },
+      { id: 'T02', name: 'T02', zone: 'โซน 2 ที่นั่ง', zoneKey: '2-seat', capacity: 2, minGuests: 1 },
+      { id: 'T03', name: 'T03', zone: 'โซน 2 ที่นั่ง', zoneKey: '2-seat', capacity: 2, minGuests: 1 },
+      { id: 'T04', name: 'T04', zone: 'โซน 2 ที่นั่ง', zoneKey: '2-seat', capacity: 2, minGuests: 1 },
+      // Zone 4 Seats
+      { id: 'T05', name: 'T05', zone: 'โซน 4 ที่นั่ง', zoneKey: '4-seat', capacity: 4, minGuests: 3 },
+      { id: 'T06', name: 'T06', zone: 'โซน 4 ที่นั่ง', zoneKey: '4-seat', capacity: 4, minGuests: 3 },
+      { id: 'T07', name: 'T07', zone: 'โซน 4 ที่นั่ง', zoneKey: '4-seat', capacity: 4, minGuests: 3 },
+      { id: 'T08', name: 'T08', zone: 'โซน 4 ที่นั่ง', zoneKey: '4-seat', capacity: 4, minGuests: 3 },
+      // Zone 6 Seats
+      { id: 'T09', name: 'T09', zone: 'โซน 6 ที่นั่ง', zoneKey: '6-seat', capacity: 6, minGuests: 5 },
+      { id: 'T10', name: 'T10', zone: 'โซน 6 ที่นั่ง', zoneKey: '6-seat', capacity: 6, minGuests: 5 },
+      // Zone VIP 10 Seats
+      { id: 'VIP01', name: 'VIP01', zone: 'โซน VIP 10 ที่นั่ง', zoneKey: 'vip-10', capacity: 10, minGuests: 7 },
+      { id: 'VIP02', name: 'VIP02', zone: 'โซน VIP 10 ที่นั่ง', zoneKey: 'vip-10', capacity: 10, minGuests: 7 },
+    ];
+
+    // -----------------------------------------------------------------------
+    // 2. APPLICATION STATE
+    // -----------------------------------------------------------------------
+    function getTodayISO() {
+      const now = new Date();
+      const offset = now.getTimezoneOffset() * 60000;
+      return new Date(now.getTime() - offset).toISOString().split('T')[0];
+    }
+
+    const state = {
+      selectedDate: getTodayISO(),
+      selectedTime: '18:30',
+      guestCount: 2,
+      manualTableId: null, // If user explicitly clicks an available table on floorplan
+      reservations: [],    // All synced reservation docs from Firestore
+      currentPass: null,
+      db: null,
+      auth: null,
+      user: null,
+      appId: typeof __app_id !== 'undefined' ? __app_id : 'default-app-id',
+      isFirebaseReady: false
+    };
+
+    // -----------------------------------------------------------------------
+    // 3. FIREBASE INITIALIZATION & REAL-TIME SYNC (Follows Mandatory Rules)
+    // -----------------------------------------------------------------------
+    async function initFirebase() {
+      const syncDot = document.getElementById('sync-dot');
+      const syncText = document.getElementById('sync-text');
+
+      try {
+        if (typeof __firebase_config === 'undefined' || !__firebase_config) {
+          throw new Error('ไม่พบการตั้งค่าฐานข้อมูลคลาวด์');
+        }
+
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        state.db = getFirestore(app);
+        state.auth = getAuth(app);
+
+        // RULE 3: Authenticate FIRST before any Firestore operations
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(state.auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(state.auth);
+        }
+
+        state.user = state.auth.currentUser;
+        if (!state.user) {
+          throw new Error('การยืนยันตัวตนไม่สำเร็จ');
+        }
+
+        state.isFirebaseReady = true;
+        syncDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse';
+        syncText.textContent = 'ซิงค์เรียลไทม์ • พร้อมใช้งาน';
+
+        // RULE 1 & 2: Strict public path & simple collection query without orderBy/limit
+        const reservationsRef = collection(state.db, 'artifacts', state.appId, 'public', 'data', 'reservations');
+
+        onSnapshot(
+          reservationsRef,
+          (snapshot) => {
+            const list = [];
+            snapshot.forEach((docSnap) => {
+              list.push({ id: docSnap.id, ...docSnap.data() });
+            });
+            state.reservations = list;
+            refreshAllViews();
+          },
+          (error) => {
+            console.error('Firestore onSnapshot error:', error);
+            syncDot.className = 'w-2.5 h-2.5 rounded-full bg-red-500';
+            syncText.textContent = 'การเชื่อมต่อขัดข้อง';
+            showToast('ไม่สามารถซิงค์ข้อมูลเรียลไทม์ได้: ' + error.message, 'error');
+          }
+        );
+      } catch (err) {
+        console.warn('Firebase init fallback:', err);
+        syncDot.className = 'w-2.5 h-2.5 rounded-full bg-amber-400';
+        syncText.textContent = 'โหมดแสดงผลตัวอย่าง';
+        refreshAllViews();
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // 4. BEST-FIT AUTO TABLE ALLOCATION ALGORITHM
+    // -----------------------------------------------------------------------
+    function getActiveReservationsForSlot(date, time) {
+      return state.reservations.filter(
+        (r) => r.date === date && r.time === time && r.status !== 'cancelled'
+      );
+    }
+
+    function computeBestFitTable(date, time, guests) {
+      const bookedList = getActiveReservationsForSlot(date, time);
+      const bookedIds = new Set(bookedList.map((r) => r.tableId));
+
+      // Filter tables that are free AND have enough seats
+      const suitableAvailable = TABLES.filter(
+        (t) => !bookedIds.has(t.id) && t.capacity >= guests
+      );
+
+      // Sort ascending by capacity so a party of 2 gets a 2-seat table first,
+      // and automatically upgrades to 4-seat if 2-seat tables are full!
+      suitableAvailable.sort((a, b) => a.capacity - b.capacity);
+
+      return suitableAvailable.length > 0 ? suitableAvailable[0] : null;
+    }
+
+    function getSelectedOrAllocatedTable() {
+      const bookedList = getActiveReservationsForSlot(state.selectedDate, state.selectedTime);
+      const bookedIds = new Set(bookedList.map((r) => r.tableId));
+
+      // If user clicked a specific table on the floorplan, verify it's still free & fits guests
+      if (state.manualTableId) {
+        const manualTable = TABLES.find((t) => t.id === state.manualTableId);
+        if (manualTable && !bookedIds.has(manualTable.id) && manualTable.capacity >= state.guestCount) {
+          return { table: manualTable, isManual: true };
+        } else {
+          state.manualTableId = null; // Reset if taken by another client in real-time!
+        }
+      }
+
+      const bestFit = computeBestFitTable(state.selectedDate, state.selectedTime, state.guestCount);
+      return { table: bestFit, isManual: false };
+    }
+
+    // -----------------------------------------------------------------------
+    // 5. ATOMIC BOOKING SUBMISSION (CONCURRENCY / DOUBLE BOOKING PREVENTION)
+    // -----------------------------------------------------------------------
+    window.handleBookingSubmit = async function (event) {
+      event.preventDefault();
+
+      if (!state.isFirebaseReady || !state.user) {
+        showToast('กรุณารอการเชื่อมต่อฐานข้อมูลเรียลไทม์สักครู่', 'error');
+        return;
+      }
+
+      const nameInput = document.getElementById('customer-name');
+      const phoneInput = document.getElementById('customer-phone');
+      const submitBtn = document.getElementById('submit-booking-btn');
+
+      const customerName = nameInput.value.trim();
+      const customerPhone = phoneInput.value.trim();
+
+      if (!customerName || !customerPhone) {
+        showToast('กรุณากรอกชื่อผู้จองและเบอร์โทรศัพท์ให้ครบถ้วน', 'error');
+        return;
+      }
+
+      const { table: targetTable } = getSelectedOrAllocatedTable();
+      if (!targetTable) {
+        showToast('ขออภัย ไม่มีโต๊ะว่างที่รองรับจำนวนคนในรอบเวลานี้ กรุณาเลือกเวลาอื่น', 'error');
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i><span>กำลังตรวจสอบและล็อกโต๊ะ...</span>';
+
+      // Generate Booking ID: BK-2026XXXX
+      const randomDigits = Math.floor(1000 + Math.random() * 9000);
+      const bookingId = `BK-2026${randomDigits}`;
+
+      // Deterministic slot lock document ID prevents two clients from booking the same table+date+time simultaneously
+      const lockDocId = `${state.selectedDate}_${state.selectedTime.replace(':', '')}_${targetTable.id}`;
+      const lockRef = doc(state.db, 'artifacts', state.appId, 'public', 'data', 'table_locks', lockDocId);
+      const reservationRef = doc(state.db, 'artifacts', state.appId, 'public', 'data', 'reservations', bookingId);
+
+      try {
+        await runTransaction(state.db, async (transaction) => {
+          const lockSnap = await transaction.get(lockRef);
+
+          if (lockSnap.exists() && lockSnap.data().status === 'locked') {
+            throw new Error('DOUBLE_BOOKING');
+          }
+
+          // Atomically lock the table slot and create the reservation record
+          transaction.set(lockRef, {
+            status: 'locked',
+            bookingId: bookingId,
+            tableId: targetTable.id,
+            date: state.selectedDate,
+            time: state.selectedTime,
+            updatedAt: serverTimestamp()
+          });
+
+          transaction.set(reservationRef, {
+            bookingId: bookingId,
+            date: state.selectedDate,
+            time: state.selectedTime,
+            guests: state.guestCount,
+            tableId: targetTable.id,
+            tableName: targetTable.name,
+            tableZone: targetTable.zone,
+            tableCapacity: targetTable.capacity,
+            customerName: customerName,
+            customerPhone: customerPhone,
+            status: 'confirmed', // confirmed | checked_in | cancelled
+            createdBy: state.user.uid,
+            createdAt: serverTimestamp()
+          });
+        });
+
+        // Reset form fields & manual table selection
+        nameInput.value = '';
+        phoneInput.value = '';
+        state.manualTableId = null;
+
+        const bookingData = {
+          bookingId,
+          date: state.selectedDate,
+          time: state.selectedTime,
+          guests: state.guestCount,
+          tableName: targetTable.name,
+          tableZone: targetTable.zone,
+          customerName,
+          customerPhone,
+          status: 'confirmed'
+        };
+
+        openPassModal(bookingData);
+        showToast(`จองสำเร็จ! รหัสการจอง ${bookingId} (${targetTable.name})`, 'success');
+      } catch (err) {
+        console.error('Booking transaction error:', err);
+        if (err.message === 'DOUBLE_BOOKING') {
+          showToast('โต๊ะนี้เพิ่งถูกจองจากเครื่องอื่นเมื่อสักครู่! ระบบได้จัดสรรโต๊ะว่างถัดไปให้แล้ว กรุณากดยืนยันอีกครั้ง', 'error');
+          state.manualTableId = null;
+          refreshAllViews();
+        } else {
+          showToast('เกิดข้อผิดพลาดในการบันทึกข้อมูล: ' + err.message, 'error');
+        }
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fa-solid fa-check-circle"></i><span>ยืนยันการจองโต๊ะทันที</span>';
+      }
+    };
+
+    // -----------------------------------------------------------------------
+    // 6. STAFF ACTIONS: CHECK-IN & CANCEL (WITH ATOMIC LOCK RELEASE)
+    // -----------------------------------------------------------------------
+    window.staffCheckIn = async function (bookingId) {
+      if (!state.isFirebaseReady || !state.user) return;
+      const resRef = doc(state.db, 'artifacts', state.appId, 'public', 'data', 'reservations', bookingId);
+      try {
+        await runTransaction(state.db, async (transaction) => {
+          const snap = await transaction.get(resRef);
+          if (!snap.exists()) throw new Error('ไม่พบข้อมูลการจอง');
+          transaction.update(resRef, {
+            status: 'checked_in',
+            checkedInAt: serverTimestamp()
+          });
+        });
+        showToast(`เช็กอินรหัส ${bookingId} เรียบร้อยแล้ว`, 'success');
+      } catch (err) {
+        showToast('ไม่สามารถเช็กอินได้: ' + err.message, 'error');
+      }
+    };
+
+    window.promptCancelBooking = function (bookingId, tableName, customerName) {
+      openConfirmModal(
+        'ยืนยันการยกเลิกการจอง',
+        `ต้องการยกเลิกการจองรหัส ${bookingId} ของคุณ ${customerName} (${tableName}) และคืนสถานะโต๊ะว่างทันทีใช่หรือไม่?`,
+        async () => {
+          await executeCancelBooking(bookingId);
+        }
+      );
+    };
+
+    async function executeCancelBooking(bookingId) {
+      if (!state.isFirebaseReady || !state.user) return;
+      const target = state.reservations.find((r) => r.bookingId === bookingId || r.id === bookingId);
+      if (!target) return;
+
+      const resRef = doc(state.db, 'artifacts', state.appId, 'public', 'data', 'reservations', target.id);
+      const lockDocId = `${target.date}_${target.time.replace(':', '')}_${target.tableId}`;
+      const lockRef = doc(state.db, 'artifacts', state.appId, 'public', 'data', 'table_locks', lockDocId);
+
+      try {
+        await runTransaction(state.db, async (transaction) => {
+          transaction.update(resRef, {
+            status: 'cancelled',
+            cancelledAt: serverTimestamp()
+          });
+          transaction.delete(lockRef);
+        });
+        showToast(`ยกเลิกการจอง ${bookingId} และคืนโต๊ะ ${target.tableName} เป็นสถานะว่างแล้ว`, 'success');
+      } catch (err) {
+        showToast('เกิดข้อผิดพลาดในการยกเลิก: ' + err.message, 'error');
+      }
+    }
+
+    // -----------------------------------------------------------------------
+    // 7. UI RENDERING FUNCTIONS
+    // -----------------------------------------------------------------------
+    function formatThaiDate(isoDate) {
+      if (!isoDate) return '-';
+      const [y, m, d] = isoDate.split('-');
+      const months = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
+      const monthName = months[parseInt(m, 10) - 1] || m;
+      return `${parseInt(d, 10)} ${monthName} ${parseInt(y, 10) + 543}`;
+    }
+
+    function renderTimeSlots() {
+      const container = document.getElementById('time-slots-grid');
+      container.innerHTML = TIME_SLOTS.map((slot) => {
+        const isSelected = state.selectedTime === slot;
+        const activeCount = getActiveReservationsForSlot(state.selectedDate, slot).length;
+        const freeCount = TABLES.length - activeCount;
+        const isFull = freeCount === 0;
+
+        return `
+          <button type="button" onclick="selectTimeSlot('${slot}')"
+            class="py-2.5 px-3 rounded-xl border text-sm font-semibold transition flex flex-col items-center justify-center
+            ${isSelected
+              ? 'bg-emerald-900 text-white border-emerald-900 shadow-xs'
+              : isFull
+                ? 'bg-stone-100 text-stone-400 border-stone-200'
+                : 'bg-cream-50 text-charcoal border-stone-200 hover:border-emerald-800 hover:bg-emerald-50'}">
+            <span>${slot} น.</span>
+            <span class="text-[10px] font-normal ${isSelected ? 'text-emerald-200' : isFull ? 'text-red-400' : 'text-stone-500'}">
+              ${isFull ? 'เต็มแล้ว' : `ว่าง ${freeCount} โต๊ะ`}
+            </span>
+          </button>
+        `;
+      }).join('');
+    }
+
+    function renderAllocationAndFloorPlan() {
+      const bookedList = getActiveReservationsForSlot(state.selectedDate, state.selectedTime);
+      const bookedMap = new Map(bookedList.map((r) => [r.tableId, r]));
+      const { table: chosenTable, isManual } = getSelectedOrAllocatedTable();
+
+      // Update Hero Counter & Floorplan Labels
+      document.getElementById('hero-available-count').textContent = Math.max(0, TABLES.length - bookedList.length);
+      document.getElementById('floorplan-date-label').textContent = formatThaiDate(state.selectedDate);
+      document.getElementById('floorplan-time-label').textContent = `${state.selectedTime} น.`;
+
+      // Update Auto-Allocation Box
+      const allocBox = document.getElementById('allocation-box');
+      const allocTitle = document.getElementById('allocated-table-title');
+      const allocDesc = document.getElementById('allocated-table-desc');
+      const allocBadge = document.getElementById('allocated-badge');
+      const submitBtn = document.getElementById('submit-booking-btn');
+
+      if (chosenTable) {
+        allocBox.className = 'rounded-2xl p-4 bg-emerald-50 border border-emerald-800/25 transition-all';
+        allocTitle.textContent = `โต๊ะ ${chosenTable.name} • ${chosenTable.zone} (สูงสุด ${chosenTable.capacity} ท่าน)`;
+        allocDesc.textContent = isManual
+          ? `คุณเลือกโต๊ะนี้ด้วยตนเองสำหรับ ${state.guestCount} ท่าน`
+          : `ขนาดเหมาะสมที่สุดสำหรับ ${state.guestCount} ท่าน (หรือคลิกเลือกโต๊ะอื่นที่ว่างบนผัง)`;
+        allocBadge.className = 'px-2.5 py-1 rounded-lg bg-emerald-800 text-white text-xs font-bold shrink-0';
+        allocBadge.textContent = isManual ? 'เลือกเอง' : 'แนะนำ (Best-Fit)';
+        submitBtn.disabled = false;
+      } else {
+        allocBox.className = 'rounded-2xl p-4 bg-red-50 border border-red-200 transition-all';
+        allocTitle.textContent = `ไม่มีโต๊ะว่างสำหรับ ${state.guestCount} ท่านในรอบ ${state.selectedTime} น.`;
+        allocDesc.textContent = 'กรุณาเปลี่ยนช่วงเวลาหรือเลือกวันอื่นที่ยังมีโต๊ะว่าง';
+        allocBadge.className = 'px-2.5 py-1 rounded-lg bg-red-600 text-white text-xs font-bold shrink-0';
+        allocBadge.textContent = 'รอบนี้เต็ม';
+        submitBtn.disabled = true;
+      }
+
+      // Render 4 Zones Floorplan
+      const zonesMeta = [
+        { key: '2-seat', title: 'โซน 2 ที่นั่ง (T01 – T04)', subtitle: 'เหมาะสำหรับ 1–2 ท่าน' },
+        { key: '4-seat', title: 'โซน 4 ที่นั่ง (T05 – T08)', subtitle: 'เหมาะสำหรับ 3–4 ท่าน' },
+        { key: '6-seat', title: 'โซน 6 ที่นั่ง (T09 – T10)', subtitle: 'เหมาะสำหรับ 5–6 ท่าน' },
+        { key: 'vip-10', title: 'โซนห้อง VIP 10 ที่นั่ง (VIP01 – VIP02)', subtitle: 'เหมาะสำหรับกลุ่มใหญ่ 7–10 ท่าน' },
+      ];
+
+      const zonesContainer = document.getElementById('floorplan-zones');
+      zonesContainer.innerHTML = zonesMeta.map((z) => {
+        const zoneTables = TABLES.filter((t) => t.zoneKey === z.key);
+        const cardsHtml = zoneTables.map((t) => {
+          const isBooked = bookedMap.has(t.id);
+          const isChosen = chosenTable && chosenTable.id === t.id;
+          const isTooSmall = t.capacity < state.guestCount;
+
+          let cardStyle = '';
+          let statusLabel = '';
+          let iconClass = 'fa-chair';
+
+          if (isBooked) {
+            cardStyle = 'bg-stone-100 border-stone-200 text-stone-400 cursor-not-allowed';
+            statusLabel = 'ถูกจองแล้ว';
+            iconClass = 'fa-lock';
+          } else if (isChosen) {
+            cardStyle = 'bg-terracotta-500 border-terracotta-600 text-white shadow-md ring-2 ring-terracotta-500/30 cursor-pointer';
+            statusLabel = isManual ? 'โต๊ะที่เลือก' : 'แนะนำสำหรับคุณ';
+            iconClass = 'fa-star';
+          } else if (isTooSmall) {
+            cardStyle = 'bg-cream-50 border-stone-200 text-stone-400 cursor-not-allowed opacity-70';
+            statusLabel = `ว่าง (${t.capacity} ที่)`;
+          } else {
+            cardStyle = 'bg-emerald-50/70 border-emerald-700/30 text-emerald-950 hover:border-emerald-800 hover:bg-emerald-100/70 cursor-pointer';
+            statusLabel = 'ว่าง • คลิกเลือก';
+          }
+
+          return `
+            <button type="button"
+              ${isBooked || isTooSmall ? 'disabled' : `onclick="selectManualTable('${t.id}')"`}
+              class="p-3.5 rounded-2xl border text-left transition flex flex-col justify-between min-h-[88px] ${cardStyle}">
+              <div class="flex items-center justify-between w-full">
+                <span class="font-bold text-base">${t.name}</span>
+                <i class="fa-solid ${iconClass} text-xs"></i>
+              </div>
+              <div class="mt-2">
+                <p class="text-[11px] font-medium opacity-85">รองรับสูงสุด ${t.capacity} ท่าน</p>
+                <p class="text-[11px] font-bold mt-0.5">${statusLabel}</p>
+              </div>
+            </button>
+          `;
+        }).join('');
+
+        return `
+          <div class="bg-cream-50/80 rounded-2xl p-4 border border-stone-200/80">
+            <div class="flex items-center justify-between mb-3">
+              <h4 class="font-bold text-sm text-emerald-900">${z.title}</h4>
+              <span class="text-xs text-stone-500">${z.subtitle}</span>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              ${cardsHtml}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    window.renderStaffDashboard = function () {
+      const dateFilter = document.getElementById('staff-date-filter').value || state.selectedDate;
+      const timeFilter = document.getElementById('staff-time-filter').value || 'ALL';
+
+      // Filter reservations by selected date
+      const dayReservations = state.reservations.filter((r) => r.date === dateFilter);
+      const filteredReservations = timeFilter === 'ALL'
+        ? dayReservations
+        : dayReservations.filter((r) => r.time === timeFilter);
+
+      // Sort by time slot ascending, then table name
+      filteredReservations.sort((a, b) => {
+        if (a.time !== b.time) return a.time.localeCompare(b.time);
+        return (a.tableName || '').localeCompare(b.tableName || '');
+      });
+
+      // Compute KPIs (excluding cancelled)
+      const activeList = filteredReservations.filter((r) => r.status !== 'cancelled');
+      const checkedInList = activeList.filter((r) => r.status === 'checked_in');
+      const totalExpectedGuests = activeList.reduce((sum, r) => sum + (Number(r.guests) || 0), 0);
+
+      const totalCapacitySlots = timeFilter === 'ALL'
+        ? TABLES.length * TIME_SLOTS.length // 12 * 6 = 72
+        : TABLES.length;                    // 12
+      const occupancyPct = totalCapacitySlots > 0
+        ? Math.round((activeList.length / totalCapacitySlots) * 100)
+        : 0;
+
+      document.getElementById('kpi-total-bookings').textContent = activeList.length;
+      document.getElementById('kpi-occupancy-rate').textContent = `${occupancyPct}%`;
+      document.getElementById('kpi-occupancy-sub').textContent = timeFilter === 'ALL'
+        ? `จองแล้ว ${activeList.length} จาก 72 รอบโต๊ะ/วัน`
+        : `จองแล้ว ${activeList.length} จาก 12 โต๊ะในรอบ ${timeFilter} น.`;
+      document.getElementById('kpi-expected-guests').innerHTML = `${totalExpectedGuests} <span class="text-base font-normal text-stone-500">ท่าน</span>`;
+      document.getElementById('kpi-checkedin-sub').textContent = `เช็กอินเข้าใช้บริการแล้ว ${checkedInList.length} รายการ`;
+
+      // Render Table Rows
+      const tbody = document.getElementById('staff-bookings-tbody');
+      if (filteredReservations.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="7" class="py-12 text-center text-stone-400">
+              <i class="fa-regular fa-folder-open text-3xl mb-2 block"></i>
+              ยังไม่มีรายการจองโต๊ะในวันที่ ${formatThaiDate(dateFilter)} ${timeFilter !== 'ALL' ? `เวลา ${timeFilter} น.` : ''}
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = filteredReservations.map((r) => {
+        let statusBadge = '';
+        let actionButtons = '';
+
+        if (r.status === 'confirmed') {
+          statusBadge = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800"><i class="fa-solid fa-clock"></i> รอเช็กอิน</span>`;
+          actionButtons = `
+            <div class="flex items-center justify-end gap-2">
+              <button onclick="staffCheckIn('${r.id}')" class="px-3 py-1.5 rounded-lg bg-emerald-800 hover:bg-emerald-900 text-white text-xs font-semibold transition">
+                <i class="fa-solid fa-user-check mr-1"></i>เช็กอิน
+              </button>
+              <button onclick="promptCancelBooking('${r.bookingId}', '${r.tableName}', '${escapeHtml(r.customerName)}')" class="px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 text-xs font-semibold transition">
+                ยกเลิก
+              </button>
+            </div>
+          `;
+        } else if (r.status === 'checked_in') {
+          statusBadge = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800"><i class="fa-solid fa-circle-check"></i> เช็กอินแล้ว</span>`;
+          actionButtons = `
+            <button onclick="promptCancelBooking('${r.bookingId}', '${r.tableName}', '${escapeHtml(r.customerName)}')" class="px-3 py-1.5 rounded-lg bg-stone-100 hover:bg-red-50 text-stone-600 hover:text-red-600 text-xs font-medium transition">
+              คืนโต๊ะ
+            </button>
+          `;
+        } else {
+          statusBadge = `<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-stone-100 text-stone-500"><i class="fa-solid fa-ban"></i> ยกเลิกแล้ว</span>`;
+          actionButtons = `<span class="text-xs text-stone-400">-</span>`;
+        }
+
+        return `
+          <tr class="hover:bg-cream-50/70 transition">
+            <td class="py-3.5 px-5 font-bold text-emerald-900 whitespace-nowrap">${r.bookingId}</td>
+            <td class="py-3.5 px-5 font-semibold whitespace-nowrap">${r.time} น.</td>
+            <td class="py-3.5 px-5 whitespace-nowrap">
+              <span class="font-bold text-terracotta-600">${r.tableName}</span>
+              <span class="text-xs text-stone-500 block">${r.tableZone}</span>
+            </td>
+            <td class="py-3.5 px-5">
+              <p class="font-semibold text-charcoal">${escapeHtml(r.customerName)}</p>
+              <p class="text-xs text-stone-500">${escapeHtml(r.customerPhone)}</p>
+            </td>
+            <td class="py-3.5 px-5 font-semibold whitespace-nowrap">${r.guests} ท่าน</td>
+            <td class="py-3.5 px-5 whitespace-nowrap">${statusBadge}</td>
+            <td class="py-3.5 px-5 text-right whitespace-nowrap">${actionButtons}</td>
+          </tr>
+        `;
+      }).join('');
+    };
+
+    function refreshAllViews() {
+      renderTimeSlots();
+      renderAllocationAndFloorPlan();
+      renderStaffDashboard();
+    }
+
+    // -----------------------------------------------------------------------
+    // 8. INTERACTIVE CONTROLS & SEARCH
+    // -----------------------------------------------------------------------
+    window.switchTab = function (tabName) {
+      const views = ['customer', 'staff', 'sdlc'];
+      views.forEach((v) => {
+        const section = document.getElementById(`view-${v}`);
+        const btn = document.getElementById(`tab-btn-${v}`);
+        if (v === tabName) {
+          section.classList.remove('hidden');
+          btn.className = 'tab-btn flex-1 md:flex-none px-4 py-2 rounded-lg text-sm font-semibold transition whitespace-nowrap flex items-center justify-center gap-2 bg-terracotta-500 text-white shadow-xs';
+        } else {
+          section.classList.add('hidden');
+          btn.className = 'tab-btn flex-1 md:flex-none px-4 py-2 rounded-lg text-sm font-medium text-emerald-100 hover:text-white transition whitespace-nowrap flex items-center justify-center gap-2';
+        }
+      });
+
+      if (tabName === 'staff') {
+        renderStaffDashboard();
+      }
+    };
+
+    window.selectTimeSlot = function (slot) {
+      state.selectedTime = slot;
+      state.manualTableId = null;
+      refreshAllViews();
+    };
+
+    window.changeGuestCount = function (delta) {
+      const next = Math.min(10, Math.max(1, state.guestCount + delta));
+      setGuestCount(next);
+    };
+
+    window.setGuestCount = function (count) {
+      state.guestCount = count;
+      state.manualTableId = null;
+      document.getElementById('guest-count-display').textContent = count;
+      refreshAllViews();
+    };
+
+    window.selectManualTable = function (tableId) {
+      state.manualTableId = tableId;
+      renderAllocationAndFloorPlan();
+    };
+
+    window.searchBookingStatus = function () {
+      const query = document.getElementById('search-booking-input').value.trim().toLowerCase();
+      const container = document.getElementById('search-results-container');
+
+      if (!query) {
+        showToast('กรุณากรอกรหัสการจองหรือเบอร์โทรศัพท์เพื่อค้นหา', 'error');
+        return;
+      }
+
+      const matches = state.reservations.filter(
+        (r) =>
+          (r.bookingId && r.bookingId.toLowerCase().includes(query)) ||
+          (r.customerPhone && r.customerPhone.replace(/-/g, '').includes(query.replace(/-/g, '')))
+      );
+
+      container.classList.remove('hidden');
+
+      if (matches.length === 0) {
+        container.innerHTML = `
+          <div class="p-4 rounded-xl bg-stone-50 border border-stone-200 text-center text-sm text-stone-500">
+            ไม่พบข้อมูลการจองที่ตรงกับ "<strong class="text-charcoal">${escapeHtml(query)}</strong>"
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = matches.map((r) => {
+        const isCancelled = r.status === 'cancelled';
+        const statusText = r.status === 'checked_in' ? 'เช็กอินแล้ว' : isCancelled ? 'ยกเลิกแล้ว' : 'ยืนยันแล้ว';
+        const statusColor = r.status === 'checked_in'
+          ? 'bg-emerald-100 text-emerald-800'
+          : isCancelled
+            ? 'bg-stone-200 text-stone-600'
+            : 'bg-terracotta-100 text-terracotta-600';
+
+        return `
+          <div class="p-4 rounded-2xl bg-cream-50 border border-stone-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="font-bold text-emerald-900">${r.bookingId}</span>
+                <span class="px-2 py-0.5 rounded-full text-[11px] font-bold ${statusColor}">${statusText}</span>
+              </div>
+              <p class="text-sm font-semibold text-charcoal mt-1">${escapeHtml(r.customerName)} • ${r.guests} ท่าน</p>
+              <p class="text-xs text-stone-500">วันที่ ${formatThaiDate(r.date)} เวลา ${r.time} น. • <strong class="text-emerald-800">โต๊ะ ${r.tableName} (${r.tableZone})</strong></p>
+            </div>
+            ${!isCancelled ? `
+              <button type="button" onclick='openPassModalById("${r.id}")' class="px-4 py-2 rounded-xl bg-emerald-900 hover:bg-emerald-800 text-white text-xs font-semibold transition shrink-0">
+                <i class="fa-solid fa-qrcode mr-1"></i> ดูบัตรคิว QR
+              </button>
+            ` : ''}
+          </div>
+        `;
+      }).join('');
+    };
+
+    // -----------------------------------------------------------------------
+    // 9. MODALS, QR CODE & CLIPBOARD UTILITIES
+    // -----------------------------------------------------------------------
+    window.openPassModalById = function (docId) {
+      const found = state.reservations.find((r) => r.id === docId);
+      if (found) openPassModal(found);
+    };
+
+    window.openPassModal = function (booking) {
+      state.currentPass = booking;
+      document.getElementById('pass-booking-id').textContent = booking.bookingId;
+      document.getElementById('pass-name').textContent = booking.customerName;
+      document.getElementById('pass-phone').textContent = booking.customerPhone;
+      document.getElementById('pass-datetime').textContent = `${formatThaiDate(booking.date)} • ${booking.time} น.`;
+      document.getElementById('pass-guests').textContent = `${booking.guests} ท่าน`;
+      document.getElementById('pass-table').textContent = `โต๊ะ ${booking.tableName} (${booking.tableZone})`;
+
+      document.getElementById('pass-sms-preview').textContent =
+        `[ครัวไพรพฤกษ์] ยืนยันการจองรหัส ${booking.bookingId} สำหรับคุณ ${booking.customerName} (${booking.guests} ท่าน) วันที่ ${formatThaiDate(booking.date)} เวลา ${booking.time} น. จัดสรรโต๊ะ ${booking.tableName} กรุณาแสดง QR Code เมื่อถึงร้าน`;
+
+      // Render QR Code
+      const qrContainer = document.getElementById('pass-qrcode');
+      qrContainer.innerHTML = '';
+      if (typeof QRCode !== 'undefined') {
+        new QRCode(qrContainer, {
+          text: `${booking.bookingId}|${booking.tableName}|${booking.date}|${booking.time}`,
+          width: 92,
+          height: 92,
+          colorDark: '#143628',
+          colorLight: '#ffffff'
+        });
+      } else {
+        qrContainer.innerHTML = `<span class="text-xs font-bold text-emerald-900">${booking.bookingId}</span>`;
+      }
+
+      const modal = document.getElementById('pass-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    };
+
+    window.closePassModal = function () {
+      const modal = document.getElementById('pass-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    };
+
+    window.copyBookingId = function () {
+      if (!state.currentPass) return;
+      const textToCopy = state.currentPass.bookingId;
+      const tempInput = document.createElement('input');
+      tempInput.value = textToCopy;
+      document.body.appendChild(tempInput);
+      tempInput.select();
+      document.execCommand('copy');
+      document.body.removeChild(tempInput);
+      showToast(`คัดลอกรหัสการจอง ${textToCopy} แล้ว`, 'success');
+    };
+
+    function openConfirmModal(title, message, onConfirmCallback) {
+      const modal = document.getElementById('confirm-modal');
+      document.getElementById('confirm-title').textContent = title;
+      document.getElementById('confirm-message').textContent = message;
+
+      const okBtn = document.getElementById('confirm-ok-btn');
+      const cancelBtn = document.getElementById('confirm-cancel-btn');
+
+      const cleanup = () => {
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+      };
+
+      okBtn.onclick = async () => {
+        cleanup();
+        await onConfirmCallback();
+      };
+      cancelBtn.onclick = cleanup;
+
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function showToast(message, type = 'success') {
+      const container = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      const bgClass = type === 'error' ? 'bg-red-600' : 'bg-emerald-900';
+      const iconClass = type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-check';
+
+      toast.className = `${bgClass} text-white px-4 py-3 rounded-xl shadow-lg flex items-center gap-3 text-sm pointer-events-auto transform transition-all duration-300`;
+      toast.innerHTML = `
+        <i class="fa-solid ${iconClass} text-base shrink-0"></i>
+        <span class="flex-1 leading-snug">${escapeHtml(message)}</span>
+      `;
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(8px)';
+        setTimeout(() => toast.remove(), 300);
+      }, 4000);
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    // -----------------------------------------------------------------------
+    // 10. BOOTSTRAP ON LOAD
+    // -----------------------------------------------------------------------
+    window.addEventListener('DOMContentLoaded', () => {
+      const bookingDateEl = document.getElementById('booking-date');
+      const staffDateEl = document.getElementById('staff-date-filter');
+
+      bookingDateEl.value = state.selectedDate;
+      bookingDateEl.min = state.selectedDate;
+      staffDateEl.value = state.selectedDate;
+
+      bookingDateEl.addEventListener('change', (e) => {
+        state.selectedDate = e.target.value || getTodayISO();
+        state.manualTableId = null;
+        staffDateEl.value = state.selectedDate;
+        refreshAllViews();
+      });
+
+      refreshAllViews();
+      initFirebase();
+    });
+  </script>
+</body>
+</html>
